@@ -54,7 +54,14 @@
       "Bash(ln -sf /usr/local/bin/hash_extender /usr/local/bin/hashpump)",
       "Bash(./install-tools.sh --list)",
       "Bash(./install-tools.sh --check)",
-      "Bash(git init *)"
+      "Bash(git init *)",
+      "Bash(curl *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git commit -m 'CyberStrikeAI v1.6.35 — Initial commit *)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'feat: merge SecSkills + hid deep knowledge into skill system *)"
     ]
   }
 }

