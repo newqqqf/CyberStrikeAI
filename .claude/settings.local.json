@@ -62,7 +62,8 @@
       "Bash(git push *)",
       "Bash(git add *)",
       "Bash(git commit -m 'feat: merge SecSkills + hid deep knowledge into skill system *)",
-      "Bash(git commit -m 'fix: replace DeepSeek embedding with local BGE ONNX server *)"
+      "Bash(git commit -m 'fix: replace DeepSeek embedding with local BGE ONNX server *)",
+      "Bash(git commit -m 'refactor: organize knowledge_base files into proper category dirs *)"
     ]
   }
 }
