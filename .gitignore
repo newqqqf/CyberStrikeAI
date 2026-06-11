@@ -1,0 +1,42 @@
+# Binary
+cyberstrike-ai
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Database
+data/*.db
+data/conversation_artifacts/
+data/eino-checkpoints/
+
+# Temp
+tmp/
+.install-tools.sh.swp
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Upgrade backups
+.upgrade-backup/
+
+# Node
+node_modules/
+
+# Claude local config (keep settings but skip session data)
+.claude/scheduled_tasks.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# MCP server builds
+mcp-servers/pent_claude_agent/cyberstrike-ai
