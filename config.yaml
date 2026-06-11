@@ -211,10 +211,10 @@ knowledge:
   enabled: true # 是否启用知识检索功能
   base_path: knowledge_base # 知识库目录路径（相对于配置文件所在目录）
   embedding:
-    provider: openai # 嵌入模型提供商（目前仅支持openai）
-    model: deepseek-v4-pro # 嵌入模型名称
-    base_url: https://api.deepseek.com/v1 # 留空则使用OpenAI配置的base_url
-    api_key: sk-a7213f786cad4b048d4948201f194bd4 # 留空则使用OpenAI配置的api_key
+    provider: openai # 嵌入模型提供商（目前仅支持openai格式）
+    model: bge-small-zh-v1.5 # 本地 BGE 中文嵌入模型 (512維)
+    base_url: http://127.0.0.1:9090/v1 # 本地 ONNX Embedding Server
+    api_key: local # 本地 server 無需真實 key
   retrieval:
     top_k: 5 # 检索返回的Top-K结果数量
     similarity_threshold: 0.4 # 余弦相似度阈值（0-1），低于此值的结果将被过滤

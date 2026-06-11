@@ -386,6 +386,26 @@ main() {
     fi
     echo ""
     
+    # 启动本地 Embedding Server (知识库 RAG)
+    EMBEDDING_PORT=9090
+    if curl -s "http://127.0.0.1:$EMBEDDING_PORT/health" >/dev/null 2>&1; then
+        info "Embedding Server 已在运行 (port $EMBEDDING_PORT)"
+    else
+        info "启动本地 Embedding Server (BGE-small-zh, port $EMBEDDING_PORT)..."
+        source "$VENV_DIR/bin/activate"
+        nohup python3 "$ROOT_DIR/embedding_server.py" --port $EMBEDDING_PORT > "$ROOT_DIR/data/embedding_server.log" 2>&1 &
+        EMBED_PID=$!
+        # 等待 server ready (最多60秒)
+        for i in $(seq 1 30); do
+            sleep 2
+            if curl -s "http://127.0.0.1:$EMBEDDING_PORT/health" >/dev/null 2>&1; then
+                success "Embedding Server 已就绪 (PID=$EMBED_PID)"
+                break
+            fi
+        done
+    fi
+    echo ""
+
     # 启动服务器
     success "所有准备工作完成！"
     echo ""
